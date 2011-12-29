@@ -23,7 +23,7 @@ map(Fun, [H|T], Length, Limit, Pos, Acc) when Limit == Pos->
         {done, Payload} ->
             map(Fun, [H|T], Length, Limit, Pos - 1, [Payload|Acc])
     after
-        60000 ->
+        20000 ->
             map(Fun, [H|T], Length, Limit, Pos - 1, [none|Acc])
     end;
 map(Fun, [], Length, Limit, Pos, Acc) when length(Acc) < Length ->
@@ -31,7 +31,7 @@ map(Fun, [], Length, Limit, Pos, Acc) when length(Acc) < Length ->
         {done, Payload} ->
             map(Fun, [], Length, Limit, Pos, [Payload|Acc])
     after
-        60000 ->
+        20000 ->
             map(Fun, [], Length, Limit, Pos, [none|Acc])
     end;
 map(_Fun, [], Length, _Limit, _Pos, Acc) when Length == length(Acc) ->
