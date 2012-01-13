@@ -57,33 +57,33 @@ map(Fun, List, {Split, [Node|T]}, Length, Limit, Pos, Acc, NodAcc) when Limit > 
     
     {Chunk, Rest} = lists:split(Split, List),
     
-    ml_worker:work(Worker, self(), {fun(N,A,F)->rpc:call(N, maelstrom, map, [F, A]) end, [Node, Fun, Chunk]}),
+    ml_worker:work(Worker, self(), {fun(N,F,A)->rpc:call(N, maelstrom, map, [F, A]) end, [Node, Fun, Chunk]}),
     map(Fun, Rest, Length, Limit, Pos + 1, Acc, lists:append(NodAcc, [Node]));
 
 %% If limit (length of nodespec) is equal to Pos (number of nodes assigned)
-map(Fun, [H|T], {Split, [Node|T]}, Length, Limit, Pos, Acc, NodAcc) when Limit == Pos->
+map(Fun, [H|T], {Split, Nodes}, Length, Limit, Pos, Acc, NodAcc) when Limit == Pos->
     receive
         {done, Payload} ->
             [N1, Rest] = NodAcc,
-            map(Fun, [H|T], {Split, lists:append(T, [N1]}, Length, Limit, Pos - 1, [Payload|Acc], Rest)
+            map(Fun, [H|T], {Split, lists:append(Nodes, [N1]}, Length, Limit, Pos - 1, [Payload|Acc], Rest)
     after
         20000 ->
             [N1, Rest] = NodAcc,
-            map(Fun, [H|T], {Split, lists:append(T, [N1]), Length, Limit, Pos - 1, [none|Acc], Rest)
+            map(Fun, [H|T], {Split, lists:append(Nodes, [N1]), Length, Limit, Pos - 1, [none|Acc], Rest)
     end;
 
 %% If passed list is empty, halt and wait for responses
 map(Fun, [], Spec, Length, Limit, Pos, Acc, NodAcc) when length(Acc) < Length ->
     receive
         {done, Payload} ->
-            map(Fun, [], Spec, Length, Limit, Pos, [Payload|Acc])
+            map(Fun, [], Spec, Length, Limit, Pos, [Payload|Acc], NodAcc)
     after
         20000 ->
-            map(Fun, [], Spec, Length, Limit, Pos, [none|Acc])
+            map(Fun, [], Spec, Length, Limit, Pos, [none|Acc], NodAcc)
     end;
 
 %% When completely done, return accumulated result
-map(_Fun, [], Spec, Length, _Limit, _Pos, Acc) when Length == length(Acc) ->
+map(_Fun, [], Spec, Length, _Limit, _Pos, Acc, _NodAcc) when Length == length(Acc) ->
     Acc.
 
 %% Check the given nodes and return a list of those that responded
