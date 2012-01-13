@@ -46,11 +46,10 @@ map(Fun, List, {Split, NodeSpec}) ->
     %% Get a list of good nodes we can send work to
     {ok, Nodes} = check_nodes(NodeSpec),
     
-    {{total, Limit}, _} = workers(),
-    
     %% Hypothetical so I can visualize:
-    map(Fun, List, {Split, NodeSpec}, length(List), Limit, 0, [], []).
+    map(Fun, List, {Split, Nodes}, length(List), length(Nodes), 0, [], []).
 
+%% Assign workers on local host to make RPC calls to worker hosts
 map(Fun, List, {Split, [Node|T]}, Length, Limit, Pos, Acc, NodAcc) when Limit > Pos ->
     
     %% Get a worker
@@ -60,6 +59,8 @@ map(Fun, List, {Split, [Node|T]}, Length, Limit, Pos, Acc, NodAcc) when Limit > 
     
     ml_worker:work(Worker, self(), {fun(N,A,F)->rpc:call(N, maelstrom, map, [F, A]) end, [Node, Fun, Chunk]}),
     map(Fun, Rest, Length, Limit, Pos + 1, Acc, lists:append(NodAcc, [Node]));
+
+%% If limit (length of nodespec) is equal to Pos (number of nodes assigned)
 map(Fun, [H|T], {Split, [Node|T]}, Length, Limit, Pos, Acc, NodAcc) when Limit == Pos->
     receive
         {done, Payload} ->
@@ -70,6 +71,8 @@ map(Fun, [H|T], {Split, [Node|T]}, Length, Limit, Pos, Acc, NodAcc) when Limit =
             [N1, Rest] = NodAcc,
             map(Fun, [H|T], {Split, lists:append(T, [N1]), Length, Limit, Pos - 1, [none|Acc], Rest)
     end;
+
+%% If passed list is empty, halt and wait for responses
 map(Fun, [], Spec, Length, Limit, Pos, Acc, NodAcc) when length(Acc) < Length ->
     receive
         {done, Payload} ->
@@ -78,6 +81,8 @@ map(Fun, [], Spec, Length, Limit, Pos, Acc, NodAcc) when length(Acc) < Length ->
         20000 ->
             map(Fun, [], Spec, Length, Limit, Pos, [none|Acc])
     end;
+
+%% When completely done, return accumulated result
 map(_Fun, [], Spec, Length, _Limit, _Pos, Acc) when Length == length(Acc) ->
     Acc.
 
