@@ -1,6 +1,6 @@
 -module(maelstrom).
 -compile([{parse_transform, lager_transform}]).
--export([start/0, workers/0, map/2, stop/0]).
+-export([start/0, workers/0, map/2, map/3, check_nodes/1, stop/0]).
 
 start() ->
     application:start(maelstrom).
@@ -57,45 +57,45 @@ map(Fun, List, {Split, [Node|T]}, Length, Limit, Pos, Acc, NodAcc) when Limit > 
     
     {Chunk, Rest} = lists:split(Split, List),
     
-    ml_worker:work(Worker, self(), {fun(N,F,A)->rpc:call(N, maelstrom, map, [F, A]) end, [Node, Fun, Chunk]}),
-    map(Fun, Rest, Length, Limit, Pos + 1, Acc, lists:append(NodAcc, [Node]));
+    ml_worker:work(Worker, self(), {fun(N,F,A)-> rpc:call(N, maelstrom, map, [F, A]) end, [Node, Fun, Chunk]}),
+    map(Fun, Rest, {Split, T}, Length, Limit, Pos + 1, Acc, lists:append(NodAcc, [Node]));
 
 %% If limit (length of nodespec) is equal to Pos (number of nodes assigned)
 map(Fun, [H|T], {Split, Nodes}, Length, Limit, Pos, Acc, NodAcc) when Limit == Pos->
     receive
         {done, Payload} ->
-            [N1, Rest] = NodAcc,
-            map(Fun, [H|T], {Split, lists:append(Nodes, [N1]}, Length, Limit, Pos - 1, [Payload|Acc], Rest)
+            [N1|Rest] = NodAcc,
+            map(Fun, [H|T], {Split, lists:append(Nodes, [N1])}, Length, Limit, Pos - 1, Payload++Acc, Rest)
     after
         20000 ->
-            [N1, Rest] = NodAcc,
-            map(Fun, [H|T], {Split, lists:append(Nodes, [N1]), Length, Limit, Pos - 1, [none|Acc], Rest)
+            [N1|Rest] = NodAcc,
+            map(Fun, [H|T], {Split, lists:append(Nodes, [N1])}, Length, Limit, Pos - 1, [none|Acc], Rest)
     end;
 
 %% If passed list is empty, halt and wait for responses
 map(Fun, [], Spec, Length, Limit, Pos, Acc, NodAcc) when length(Acc) < Length ->
     receive
         {done, Payload} ->
-            map(Fun, [], Spec, Length, Limit, Pos, [Payload|Acc], NodAcc)
+            map(Fun, [], Spec, Length, Limit, Pos, Payload++Acc, NodAcc)
     after
         20000 ->
             map(Fun, [], Spec, Length, Limit, Pos, [none|Acc], NodAcc)
     end;
 
 %% When completely done, return accumulated result
-map(_Fun, [], Spec, Length, _Limit, _Pos, Acc, _NodAcc) when Length == length(Acc) ->
+map(_Fun, [], _Spec, Length, _Limit, _Pos, Acc, _NodAcc) when Length == length(Acc) ->
     Acc.
 
 %% Check the given nodes and return a list of those that responded
 check_nodes(NodeList) ->
     check_nodes(NodeList, []).
 check_nodes([H|T], Acc) ->
-    case net:ping(H) of
+    case net_adm:ping(H) of
         pong ->
             check_nodes(T, lists:append(Acc, [H]));
         pang ->
-            check_nodes(T, Acc),
-            lager:info("~p is not responding...", [H])
+            lager:info("~p is not responding...", [H]),
+            check_nodes(T, Acc)
     end;
 check_nodes([], Acc) ->
     {ok, Acc}.
