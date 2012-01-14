@@ -1,27 +1,19 @@
--module(ml_worker_supervisor).
+%%%-------------------------------------------------------------------------
+%%% @author    Parnell Springmeyer <parnell@whooshtraffic.com>
+%%% @copyright 2012 Whoosh Traffic
+%%% @doc       Supervisor for the pool workers. Que?
+%%% @end
+%%%-------------------------------------------------------------------------
 
+-module(ml_worker_supervisor).
 -behaviour(supervisor).
 
-%% api
 -export([start_link/1]).
-
-%% supervisor callbacks
 -export([init/1]).
 
-
-%% ----------------------------------------------------------------------------
-%% api
-%% ----------------------------------------------------------------------------
-
-%% @doc Start linked hot tub worker supervisor.
 start_link(Limit) ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, [Limit]).
 
-%% ----------------------------------------------------------------------------
-%% supervisor callbacks
-%% ----------------------------------------------------------------------------
-
-%% @private
 init([Limit]) ->
     ChildSpecs = lists:map(
         fun (Id) ->

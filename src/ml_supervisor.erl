@@ -1,10 +1,16 @@
+%%%-------------------------------------------------------------------------
+%%% @author    Parnell Springmeyer <parnell@whooshtraffic.com>
+%%% @copyright 2012 Whoosh Traffic
+%%% @doc       Primary supervisor for the maelstrom pool server and worker
+%%%            supervisor.
+%%% @end
+%%%-------------------------------------------------------------------------
+
 -module(ml_supervisor).
 -behavior(supervisor).
 -compile([{parse_transform, lager_transform}]).
 
 -export([start_link/1]).
-
-%% Supervisor callbacks
 -export([init/1]).
 
 -define(SERVER, ?MODULE).

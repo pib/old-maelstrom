@@ -1,18 +1,120 @@
+%%%-------------------------------------------------------------------------
+%%% @author    Parnell Springmeyer <parnell@whooshtraffic.com>
+%%% @copyright 2012 Whoosh Traffic
+%%% @doc       Convenience interface module to maelstrom - the most common
+%%%            use case would be to map a function over a list. This module
+%%%            provides a map/2 and map/3.
+%%%            
+%%%            map/2 is a drop-in replacement for stdlib map/2 and will map
+%%%            a given fun over a list of elements using maelstrom's worker
+%%%            pool. NOTE: the pool must be started first!
+%%%
+%%%            If a worker crashes it will be restarted - but any data
+%%%            passed to it cannot be recovered.
+%%%
+%%%            map/3 is a distributed implementation. If you have nodes with
+%%%            maelstrom installed and started this function will distribute
+%%%            the workload to those nodes, collect the results, and return.
+%%%
+%%%            It gracefully handles nodes going down and in the case of a
+%%%            node going down before a batch is sent to it, the data is
+%%%            recovered and retried once another available node has finished
+%%%            its work.
+%%%
+%%%            If a node is working and crashes there is no route for
+%%%            for recovering the data passed to that node (much like
+%%%            a crashed worker).
+%%%            
+%%% @end
+%%%-------------------------------------------------------------------------
+%%%-------------------------------------------------------------------------
+%%% NOTE: maelstrom:start()/stop() can be used in lieu of
+%%% application:start()/stop().
+%%%
+%%% @example
+%%%
+%%%     1> maelstrom:start().
+%%%     18:32:20.988 [info] Application lager started on node nonode@nohost
+%%%     18:32:21.000 [info] Starting up... worker_0
+%%%     18:32:21.000 [info] Starting up... worker_1
+%%%     18:32:21.000 [info] Starting up... worker_2
+%%%     18:32:21.000 [info] Starting up... worker_3
+%%%     18:32:21.001 [info] Starting up... worker_4
+%%%     18:32:21.001 [info] Starting up... worker_5
+%%%     18:32:21.001 [info] Starting up... worker_6
+%%%     18:32:21.001 [info] Starting up... worker_7
+%%%     18:32:21.001 [info] Starting up... worker_8
+%%%     18:32:21.001 [info] Starting up... worker_9
+%%%     18:32:21.002 [info] Application maelstrom started on node nonode@nohost
+%%%     ok
+%%%     2> maelstrom:map(fun(X) -> X*2 end, [1,2,3,4,5]).
+%%%     [10,8,6,4,2]
+%%%     3>
+%%%-------------------------------------------------------------------------
+%%%-------------------------------------------------------------------------
+%%% NOTE: if you want a "fallback" node, the host node is a good option and
+%%% recommended! In this example, "host@Acuitas" is the host machine making
+%%% the actual call.
+%%%
+%%% @example
+%%%
+%%%     (host@Acuitas)1> maelstrom:start().
+%%%     18:37:11.306 [info] Application lager started on node host@Acuitas
+%%%     18:37:11.314 [info] Starting up... worker_0
+%%%     18:37:11.314 [info] Starting up... worker_1
+%%%     18:37:11.315 [info] Starting up... worker_2
+%%%     18:37:11.315 [info] Starting up... worker_3
+%%%     18:37:11.315 [info] Starting up... worker_4
+%%%     18:37:11.315 [info] Starting up... worker_5
+%%%     18:37:11.316 [info] Starting up... worker_6
+%%%     18:37:11.316 [info] Starting up... worker_7
+%%%     18:37:11.316 [info] Starting up... worker_8
+%%%     18:37:11.316 [info] Starting up... worker_9
+%%%     18:37:11.316 [info] Application maelstrom started on node host@Acuitas
+%%%     ok
+%%%     (host@Acuitas)2> maelstrom:map(fun(X) -> X*2 end, [1,2,3,4,5,6,7,8], {4, [worker@zatharus, host@Acuitas]}).
+%%%     [8,6,4,2,16,14,12,10]
+%%%     (host@Acuitas)3>
+
 -module(maelstrom).
 -compile([{parse_transform, lager_transform}]).
 -export([start/0, workers/0, map/2, map/3, check_nodes/1, stop/0]).
 
+%%----------------------------------------------------------------------
+%% @doc  Starts the maelstrom worker pool server.
+%% 
+%% @spec start() -> ok
+%%
+%% @end
+%%----------------------------------------------------------------------
 start() ->
     application:start(maelstrom).
 
+%%----------------------------------------------------------------------
+%% @doc  Returns the worker pool limit and the number of unused workers.
+%% 
+%% @spec workers() -> {{total, Integer}, {unused, Integer}}
+%% where
+%%  Integer = integer()
+%% @end
+%%----------------------------------------------------------------------
 workers() ->
     {{total, ml_server:limit()}, {unused, ml_server:unused()}}.
 
-%% Map over a list only on the local node
+%%----------------------------------------------------------------------
+%% @doc  Map over a list applying a given fun and returning the
+%%       collected results.
+%% 
+%% @spec map(Fun::fun(), List::list()) -> Result
+%% where
+%%  Result = list()
+%% @end
+%%----------------------------------------------------------------------
 map(Fun, List) ->
     {{total, Limit}, _} = workers(),
     map(Fun, List, length(List), Limit, 0, []).
 
+%% Private map API
 map(Fun, [H|T], Length, Limit, Pos, Acc) when Limit > Pos ->
     
     %% Get a worker
@@ -39,7 +141,26 @@ map(Fun, [], Length, Limit, Pos, Acc) when length(Acc) < Length ->
 map(_Fun, [], Length, _Limit, _Pos, Acc) when Length == length(Acc) ->
     Acc.
 
-%% Map over a list on multiple nodes
+%%----------------------------------------------------------------------
+%% @doc  Map over a list splitting the list by Split::integer() and
+%%       rpc:call()ing maelstrom:map/2 on a remote node given by
+%%       NodeSpec::list() along with Fun::fun().
+%%
+%%       This function will intelligently handle crashing nodes, if a
+%%       node goes down before rpc:call is called, the data will be
+%%       recovered. If a node crashes while the work is being done no
+%%       data will be recovered.
+%%
+%%       NodeSpec::list() should be a list of nodes:
+%%       [node1|...]. map/3 will divide the work to be done amongst
+%%       the nodes and redelegate to a node after it returns with
+%%       results from its workload.
+%% 
+%% @spec map(Fun::fun(), List::list(), {Split::integer(), NodeSpec::list()}) -> Result
+%% where
+%%  Result = list()
+%% @end
+%%----------------------------------------------------------------------
 map(Fun, List, {Split, NodeSpec}) when length(List) >= Split ->
     application:start(lager),
     

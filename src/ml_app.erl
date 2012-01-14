@@ -1,3 +1,10 @@
+%%%-------------------------------------------------------------------------
+%%% @author    Parnell Springmeyer <parnell@whooshtraffic.com>
+%%% @copyright 2012 Whoosh Traffic
+%%% @doc       Interface for application:start/stop/takeover/&c...
+%%% @end
+%%%-------------------------------------------------------------------------
+
 -module(ml_app).
 -behavior(application).
 -compile([{parse_transform, lager_transform}]).
