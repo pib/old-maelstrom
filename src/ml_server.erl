@@ -113,7 +113,7 @@ checkin(Id) ->
     gen_server:cast(?MODULE, {checkin, Id}).
 
 %%----------------------------------------------------------------------
-%% @doc  Check a worker out of the pool.
+%% @doc  Check a worker out of the pool. It has a thirty second timeout.
 %% 
 %% @spec checkout() -> WorkerId
 %% where
@@ -121,7 +121,7 @@ checkin(Id) ->
 %% @end
 %%----------------------------------------------------------------------
 checkout() ->
-    gen_server:call(?MODULE, checkout).
+    gen_server:call(?MODULE, checkout, 30000).
 
 %%%=====================================================================
 %%% Private API
