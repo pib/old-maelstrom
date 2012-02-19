@@ -176,6 +176,13 @@ map(Fun, List, {Split, [Node|T]}, Length, Limit, Pos, Acc, NodAcc) when Limit > 
     %% Get a worker
     Worker = ml_server:checkout(),
     
+    case Worker of
+        none  ->
+            map(Fun, List, {Split, [Node|T]}, Length, Limit, Pos, Acc, NodAcc);
+        _Else ->
+            itsok
+    end,
+    
     {Chunk, Rest} = case length(List) > 1 of
         true ->
             lists:split(Split, List);
