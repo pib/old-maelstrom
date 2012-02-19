@@ -150,7 +150,7 @@ handle_call(checkout, From, State) ->
             {reply, Worker, State#state{unused=Unused}};
         {empty, _Unused} ->
             Checkouts = queue:in(From, State#state.checkouts),
-            {noreply, State#state{checkouts=Checkouts}}
+            {reply, none, State#state{checkouts=Checkouts}}
     end.
 
 handle_cast({checkin, Worker}, State) ->
