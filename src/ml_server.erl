@@ -167,7 +167,7 @@ handle_cast({enqueue, Worker}, State) ->
     case queue:out(State#state.checkouts) of
         {{value, P}, Checkouts} ->
             gen_server:reply(P, Worker),
-            {reply, State#state{checkouts=Checkouts}};
+            {noreply, State#state{checkouts=Checkouts}};
         {empty, _Checkouts} ->
             Unused = queue:in(Worker, State#state.unused),
             {noreply, State#state{unused=Unused}}
