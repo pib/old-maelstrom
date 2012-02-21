@@ -116,7 +116,6 @@ map(Fun, List) ->
 
 %% Private map API
 map(Fun, [H|T], Length, Limit, Pos, Acc) when Limit > Pos ->
-    
     %% Get a worker
     Worker = ml_server:checkout(),
     
@@ -126,17 +125,11 @@ map(Fun, [H|T], Length, Limit, Pos, Acc) when Limit == Pos->
     receive
         {done, Payload} ->
             map(Fun, [H|T], Length, Limit, Pos - 1, [Payload|Acc])
-    after
-        20000 ->
-            map(Fun, [H|T], Length, Limit, Pos - 1, [none|Acc])
     end;
 map(Fun, [], Length, Limit, Pos, Acc) when length(Acc) < Length ->
     receive
         {done, Payload} ->
             map(Fun, [], Length, Limit, Pos, [Payload|Acc])
-    after
-        20000 ->
-            map(Fun, [], Length, Limit, Pos, [none|Acc])
     end;
 map(_Fun, [], Length, _Limit, _Pos, Acc) when Length == length(Acc) ->
     Acc.
@@ -166,33 +159,27 @@ map(Fun, List, {Split, NodeSpec}) when length(List) >= Split ->
     
     %% Get a list of good nodes we can send work to
     {ok, Nodes} = check_nodes(NodeSpec),
-    
-    %% Hypothetical so I can visualize:
     map(Fun, List, {Split, Nodes}, length(List), length(Nodes), 0, [], []).
 
 %% Assign workers on local host to make RPC calls to worker hosts
 map(Fun, List, {Split, [Node|T]}, Length, Limit, Pos, Acc, NodAcc) when Limit > Pos ->
     
-    %% Get a worker
     Worker = ml_server:checkout(),
-    
     case Worker of
-        none  ->
+        none ->
             map(Fun, List, {Split, [Node|T]}, Length, Limit, Pos, Acc, NodAcc);
         _Else ->
-            itsok
-    end,
-    
-    {Chunk, Rest} = case length(List) > 1 of
-        true ->
-            lists:split(Split, List);
-        _Else ->
-            [H|_T] = List,
-            {[H], []}
-    end,
-    
-    ml_worker:work(Worker, self(), {fun(N,F,A,P)-> rpc(N,F,A,P) end, [Node, Fun, Chunk, self()]}),
-    map(Fun, Rest, {Split, T}, Length, Limit, Pos + 1, Acc, lists:append(NodAcc, [Node]));
+            {Chunk, Rest} = case length(List) > Split of
+                true ->
+                    lists:split(Split, List);
+                false ->
+                    [H|Tail] = List,
+                    {[H], Tail}
+            end,
+            
+            ml_worker:work(Worker, self(), {fun(N,F,A,P)-> rpc(N,F,A,P) end, [Node, Fun, Chunk, self()]}),
+            map(Fun, Rest, {Split, T}, Length, Limit, Pos + 1, Acc, lists:append(NodAcc, [Node]))
+    end;
 
 %% If limit (length of nodespec) is equal to Pos (number of nodes assigned)
 map(Fun, [H|T], {Split, Nodes}, Length, Limit, Pos, Acc, NodAcc) when Limit == Pos->
@@ -212,10 +199,6 @@ map(Fun, [H|T], {Split, Nodes}, Length, Limit, Pos, Acc, NodAcc) when Limit == P
             
             %% Pos must not be decremented because we still may need to receive a result from the other node!
             map(Fun, [H|Reunited], {Split, Nodes}, Length, Limit, Pos, Acc, D)
-    after
-        20000 ->
-            [N1|Rest] = NodAcc,
-            map(Fun, [H|T], {Split, lists:append(Nodes, [N1])}, Length, Limit, Pos - 1, [none|Acc], Rest)
     end;
 
 %% If passed list is empty, halt and wait for responses
@@ -233,9 +216,6 @@ map(Fun, [], Spec, Length, Limit, Pos, Acc, NodAcc) when length(Acc) < Length ->
             
             %% Pos must not be decremented because we still may need to receive a result from the other node!
             map(Fun, Data, Spec, Length, Limit, Pos, Acc, D)
-    after
-        20000 ->
-            map(Fun, [], Spec, Length, Limit, Pos, [none|Acc], NodAcc)
     end;
 
 %% When completely done, return accumulated result

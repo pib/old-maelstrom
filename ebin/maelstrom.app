@@ -9,7 +9,7 @@
                  ml_worker,
                  ml_worker_supervisor
                  ]},
-  {registered, [ml_sup]},
+  {registered, [ml_supervisor]},
   {applications, [kernel, stdlib]},
   {env, [{limit, 10}]},
   {mod, {ml_app, []}}
