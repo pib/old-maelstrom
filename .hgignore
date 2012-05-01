@@ -7,7 +7,6 @@ TAGS
 deps/*
 ebin/*
 .eunit/*
-rel/*
 
 whoosh.egg-info
 whooshtraffic.egg-info

@@ -1,0 +1,12 @@
+%% rel generated at {2012,5,1} {1,48,30}
+{release,{"maelstrom","1"},
+         {erts,"5.8.5"},
+         [{kernel,"2.14.5"},
+          {stdlib,"1.17.5"},
+          {syntax_tools,"1.6.7.1"},
+          {compiler,"4.7.5"},
+          {lager,"1.0.0"},
+          {maelstrom,"1"},
+          {sasl,"2.1.10"},
+          {crypto,"2.0.4",load}]}.
+

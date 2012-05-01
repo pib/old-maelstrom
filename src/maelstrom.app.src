@@ -1,7 +1,7 @@
 %% -*- mode: Erlang; fill-column: 75; comment-column: 50; -*-
 {application, maelstrom,
  [{description, "An abstract process pool gen_server"},
-  {vsn,         "1.0"},
+  {vsn,         "1"},
   {modules,     [maelstrom,
                  ml_app,
                  ml_server,
