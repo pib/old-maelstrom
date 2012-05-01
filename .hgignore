@@ -20,6 +20,7 @@ docs/Makefile
 *.elc
 *.pyc
 *.beam
+*.dump
 \#*
 .\#*
 .DS_Store
