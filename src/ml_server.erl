@@ -9,7 +9,6 @@
 
 -module(ml_server).
 -behaviour(gen_server).
--compile([{parse_transform, lager_transform}]).
 
 %% API
 -export([start_link/1, limit/0, unused/0, status/0, queue/0, enqueue/1, dequeue/1, checkout/0, checkin/1]).
