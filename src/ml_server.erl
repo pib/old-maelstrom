@@ -155,7 +155,7 @@ handle_call(checkout, From, State) ->
 handle_cast({checkin, Worker}, State) ->
     case queue:out(State#state.checkouts) of
         {{value, P}, Checkouts} ->
-            gen_server:reply(P, Worker),
+            gen_server:reply(P, {worker, Worker}),
             {noreply, State#state{checkouts=Checkouts}};
         {empty, _Checkouts} ->
             Unused = queue:in(Worker, State#state.unused),
@@ -165,7 +165,7 @@ handle_cast({enqueue, Worker}, State) ->
     erlang:monitor(process, whereis(Worker)),
     case queue:out(State#state.checkouts) of
         {{value, P}, Checkouts} ->
-            gen_server:reply(P, Worker),
+            gen_server:reply(P, {worker, Worker}),
             {noreply, State#state{checkouts=Checkouts}};
         {empty, _Checkouts} ->
             Unused = queue:in(Worker, State#state.unused),

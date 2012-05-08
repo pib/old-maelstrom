@@ -7,6 +7,10 @@ TAGS
 deps/*
 ebin/*
 .eunit/*
+rel/ranktracker_daily
+rel/ranktracker_new
+rel/ranktracker_scan
+rel/ranktracker_scan_new
 
 whoosh.egg-info
 whooshtraffic.egg-info

@@ -52,17 +52,7 @@
 %%%     3>
 
 -module(maelstrom).
--export([start/0, workers/0, map/2, stop/0]).
-
-%%----------------------------------------------------------------------
-%% @doc  Starts the maelstrom worker pool server.
-%% 
-%% @spec start() -> ok
-%%
-%% @end
-%%----------------------------------------------------------------------
-start() ->
-    application:start(maelstrom).
+-export([map/2]).
 
 %%----------------------------------------------------------------------
 %% @doc  Returns the worker pool limit and the number of unused workers.
@@ -72,8 +62,66 @@ start() ->
 %%  Integer = integer()
 %% @end
 %%----------------------------------------------------------------------
-workers() ->
-    {{total, ml_server:limit()}, {unused, ml_server:unused()}}.
+
+collector(Parent, Expected, Acc) ->
+    case length(Acc) < Expected of
+        true  ->
+            receive
+                {done, Payload} ->
+                    collector(Parent, Expected, [Payload|Acc]);
+                send_payload ->
+                    Parent ! {collector, Acc}
+            end;
+        false ->
+            Parent ! {collector, Acc}
+    end.
+
+map(Fun, Items) ->
+    map(Fun, Items, length(Items), undefined).
+
+map(Fun, [H|T], Length, Collector) ->
+    
+    Self = self(),
+    
+    %% Spawn the collector
+    case Collector of
+        undefined ->
+            CollectorPID = spawn_link(fun() -> collector(Self, Length, []) end);
+        _Else     ->
+            CollectorPID = Collector
+    end,
+    
+    Worker = case ml_server:checkout() of
+        none ->
+            receive
+                {_Ref, {worker, Value}} ->
+                    Value
+            after
+                300000 ->
+                    exit(took_too_long)
+            end;
+        Value ->
+            Value
+    end,
+    
+    %% Setup a monitors on the workers so we know when they crash
+    erlang:monitor(process, whereis(Worker)),
+    
+    ml_worker:work(Worker, CollectorPID, {Fun, [H]}),
+    map(Fun, T, Length, CollectorPID);
+
+map(Fun, [], Length, Collector) ->
+    receive
+        {collector, Values} ->
+            Values;
+        {'DOWN', _MonitorRef, _Type, _Object, Info} ->
+            lager:error("~p", [Info]),
+            Collector ! send_payload,
+            map(Fun, [], Length, Collector)
+    after
+        600000 ->
+            exit(took_too_long)
+    end.
 
 %%----------------------------------------------------------------------
 %% @doc  Map over a list applying a given fun and returning the
@@ -84,26 +132,26 @@ workers() ->
 %%  Result = list()
 %% @end
 %%----------------------------------------------------------------------
-map(Fun, List) ->
-    {{total, Limit}, _} = workers(),
-    map(Fun, List, length(List), Limit, 0, []).
+%% map(Fun, List) ->
+%%     {{total, Limit}, _} = workers(),
+%%     map(Fun, List, length(List), Limit, 0, []).
 
 %% Private map API
-map(Fun, [H|T], Length, Limit, Pos, Acc) when Limit > Pos ->
-    %% Get a worker
-    Worker = ml_server:checkout(),
+%% map(Fun, [H|T], Length, Limit, Pos, Acc) when Limit > Pos ->
+%%     Get a worker
+%%     Worker = ml_server:checkout(),
     
-    ml_worker:work(Worker, self(), {Fun, [H]}),
-    map(Fun, T, Length, Limit, Pos + 1, Acc);
-map(Fun, [H|T], Length, Limit, Pos, Acc) when Limit == Pos->
-    receive
-        {done, Payload} ->
-            map(Fun, [H|T], Length, Limit, Pos - 1, [Payload|Acc])
-    end;
-map(Fun, [], Length, Limit, Pos, Acc) when length(Acc) < Length ->
-    receive
-        {done, Payload} ->
-            map(Fun, [], Length, Limit, Pos, [Payload|Acc])
-    end;
-map(_Fun, [], Length, _Limit, _Pos, Acc) when Length == length(Acc) ->
-    Acc.
+%%     ml_worker:work(Worker, self(), {Fun, [H]}),
+%%     map(Fun, T, Length, Limit, Pos + 1, Acc);
+%% map(Fun, [H|T], Length, Limit, Pos, Acc) when Limit == Pos->
+%%     receive
+%%         {done, Payload} ->
+%%             map(Fun, [H|T], Length, Limit, Pos - 1, [Payload|Acc])
+%%     end;
+%% map(Fun, [], Length, Limit, Pos, Acc) when length(Acc) < Length ->
+%%     receive
+%%         {done, Payload} ->
+%%             map(Fun, [], Length, Limit, Pos, [Payload|Acc])
+%%     end;
+%% map(_Fun, [], Length, _Limit, _Pos, Acc) when Length == length(Acc) ->
+%%     Acc.
